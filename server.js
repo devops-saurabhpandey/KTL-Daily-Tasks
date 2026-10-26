@@ -1,0 +1,92 @@
+const express = require("express");
+const { MongoClient, ObjectId } = require("mongodb");
+const path = require("path");
+
+const app = express();
+app.use(express.json({ limit: "1mb" }));
+app.use(express.static(path.join(__dirname, "public")));
+
+const PORT = process.env.PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI;
+const DB_NAME = process.env.MONGODB_DB || "ktl_daily_tasks";
+let tasks;
+
+function clean(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", app: "KTL Daily Tasks", database: tasks ? "connected" : "not_configured_or_disconnected" });
+});
+
+app.get("/api/tasks", async (req, res) => {
+  try {
+    if (!tasks) return res.status(503).json({ error: "Database is not connected. Set MONGODB_URI in deployment environment." });
+    const q = clean(req.query.q);
+    const filter = q ? {
+      $or: [
+        { customerName: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { phone: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { chassisNumber: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { vehicleNumber: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } }
+      ]
+    } : {};
+    const rows = await tasks.find(filter).sort({ createdAt: -1 }).limit(500).toArray();
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: "Unable to load tasks." }); }
+});
+
+app.post("/api/tasks", async (req, res) => {
+  try {
+    if (!tasks) return res.status(503).json({ error: "Database is not connected. Set MONGODB_URI." });
+    const customerName = clean(req.body.customerName);
+    const phone = clean(req.body.phone);
+    const chassisNumber = clean(req.body.chassisNumber);
+    const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
+    if (!customerName) return res.status(400).json({ error: "Customer name is required." });
+    const now = new Date();
+    const item = {
+      customerName, phone, chassisNumber, vehicleNumber,
+      numberPlateStatus: req.body.numberPlateStatus === "Received" ? "Received" : "Pending",
+      rcStatus: req.body.rcStatus === "Received" ? "Received" : "Pending",
+      createdAt: now, updatedAt: now
+    };
+    const result = await tasks.insertOne(item);
+    res.status(201).json({ ...item, _id: result.insertedId });
+  } catch (e) { res.status(500).json({ error: "Unable to save task." }); }
+});
+
+app.patch("/api/tasks/:id", async (req, res) => {
+  try {
+    if (!tasks) return res.status(503).json({ error: "Database is not connected. Set MONGODB_URI." });
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid task ID." });
+    const update = {};
+    for (const key of ["customerName", "phone", "chassisNumber", "vehicleNumber"]) {
+      if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
+    }
+    for (const key of ["numberPlateStatus", "rcStatus"]) {
+      if (["Received", "Pending"].includes(req.body[key])) update[key] = req.body[key];
+    }
+    if (update.vehicleNumber) update.vehicleNumber = update.vehicleNumber.toUpperCase();
+    update.updatedAt = new Date();
+    const result = await tasks.updateOne({ _id: new ObjectId(req.params.id) }, { $set: update });
+    if (!result.matchedCount) return res.status(404).json({ error: "Task not found." });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: "Unable to update task." }); }
+});
+
+app.get("*", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+
+async function start() {
+  if (MONGODB_URI) {
+    const client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+    await client.connect();
+    tasks = client.db(DB_NAME).collection("tasks");
+    await tasks.createIndex({ createdAt: -1 });
+    console.log("MongoDB connected");
+  } else {
+    console.warn("MONGODB_URI is not set; API will report database unavailable.");
+  }
+  app.listen(PORT, "0.0.0.0", () => console.log(`KTL Daily Tasks listening on ${PORT}`));
+}
+start().catch(err => { console.error("Startup failed:", err.message); process.exit(1); });
