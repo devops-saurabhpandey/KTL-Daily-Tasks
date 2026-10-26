@@ -1,0 +1,13 @@
+{
+  "name": "ktl-daily-tasks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KTL customer vehicle daily task management app",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mongodb": "^6.12.0"
+  }
+}
