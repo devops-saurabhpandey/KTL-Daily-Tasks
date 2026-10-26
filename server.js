@@ -42,13 +42,14 @@ app.post("/api/tasks", async (req, res) => {
     const customerName = clean(req.body.customerName);
     const phone = clean(req.body.phone);
     const chassisNumber = clean(req.body.chassisNumber);
+    const engineNumber = clean(req.body.engineNumber);
     const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
     const taskDateInput = clean(req.body.taskDate);
     const taskDate = taskDateInput && /^\d{4}-\d{2}-\d{2}$/.test(taskDateInput) ? new Date(taskDateInput + "T00:00:00.000Z") : new Date();
     if (!customerName) return res.status(400).json({ error: "Customer name is required." });
     const now = new Date();
     const item = {
-      customerName, phone, chassisNumber, vehicleNumber, taskDate,
+      customerName, phone, chassisNumber, engineNumber, vehicleNumber, taskDate,
       numberPlateStatus: req.body.numberPlateStatus === "Received" ? "Received" : "Pending",
       rcStatus: req.body.rcStatus === "Received" ? "Received" : "Pending",
       createdAt: now, updatedAt: now
@@ -63,7 +64,7 @@ app.patch("/api/tasks/:id", async (req, res) => {
     if (!tasks) return res.status(503).json({ error: "Database is not connected. Set MONGODB_URI." });
     if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid task ID." });
     const update = {};
-    for (const key of ["customerName", "phone", "chassisNumber", "vehicleNumber"]) {
+    for (const key of ["customerName", "phone", "chassisNumber", "engineNumber", "vehicleNumber"]) {
       if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
     }
     if (typeof req.body.taskDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.taskDate)) update.taskDate = new Date(req.body.taskDate + "T00:00:00.000Z");
