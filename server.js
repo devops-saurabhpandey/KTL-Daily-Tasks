@@ -15,6 +15,55 @@ function clean(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeWhatsAppNumber(value) {
+  let digits = String(value || "").replace(/\\D/g, "");
+  if (digits.length === 10) digits = "91" + digits;
+  return digits;
+}
+
+async function sendRcReceivedWhatsApp(task) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const templateName = process.env.WHATSAPP_RC_TEMPLATE_NAME;
+  if (!phoneNumberId || !accessToken || !templateName) {
+    console.warn("RC WhatsApp notification skipped: WhatsApp Cloud API environment variables are not configured.");
+    return { sent: false, reason: "not_configured" };
+  }
+  const to = normalizeWhatsAppNumber(task.phone);
+  if (!to || to.length < 10) {
+    console.warn("RC WhatsApp notification skipped: customer phone number is missing or invalid.");
+    return { sent: false, reason: "invalid_phone" };
+  }
+  const apiVersion = process.env.WHATSAPP_GRAPH_API_VERSION || "v23.0";
+  const response = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: process.env.WHATSAPP_RC_TEMPLATE_LANGUAGE || "en" },
+        components: [{
+          type: "body",
+          parameters: [
+            { type: "text", text: clean(task.customerName) || "Customer" },
+            { type: "text", text: clean(task.vehicleNumber) || "your vehicle" }
+          ]
+        }]
+      }
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("WhatsApp RC notification failed:", JSON.stringify(result));
+    return { sent: false, reason: "provider_error" };
+  }
+  console.log("RC WhatsApp notification accepted by Meta for task", String(task._id));
+  return { sent: true };
+}
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", app: "KTL Daily Tasks", database: tasks ? "connected" : "not_configured_or_disconnected" });
 });
@@ -63,6 +112,9 @@ app.patch("/api/tasks/:id", async (req, res) => {
   try {
     if (!tasks) return res.status(503).json({ error: "Database is not connected. Set MONGODB_URI." });
     if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid task ID." });
+    const taskId = new ObjectId(req.params.id);
+    const existing = await tasks.findOne({ _id: taskId });
+    if (!existing) return res.status(404).json({ error: "Task not found." });
     const update = {};
     for (const key of ["customerName", "phone", "chassisNumber", "engineNumber", "vehicleNumber"]) {
       if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
@@ -73,9 +125,17 @@ app.patch("/api/tasks/:id", async (req, res) => {
     }
     if (update.vehicleNumber) update.vehicleNumber = update.vehicleNumber.toUpperCase();
     update.updatedAt = new Date();
-    const result = await tasks.updateOne({ _id: new ObjectId(req.params.id) }, { $set: update });
-    if (!result.matchedCount) return res.status(404).json({ error: "Task not found." });
-    res.json({ success: true });
+    await tasks.updateOne({ _id: taskId }, { $set: update });
+    let whatsapp = { sent: false, reason: "not_rc_transition" };
+    if (existing.rcStatus !== "Received" && update.rcStatus === "Received") {
+      try {
+        whatsapp = await sendRcReceivedWhatsApp({ ...existing, ...update, _id: taskId });
+      } catch (err) {
+        console.error("WhatsApp RC notification error:", err.message);
+        whatsapp = { sent: false, reason: "send_error" };
+      }
+    }
+    res.json({ success: true, whatsapp });
   } catch (e) { res.status(500).json({ error: "Unable to update task." }); }
 });
 
