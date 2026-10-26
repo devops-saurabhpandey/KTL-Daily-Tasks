@@ -44,7 +44,7 @@ app.post("/api/tasks", async (req, res) => {
     const chassisNumber = clean(req.body.chassisNumber);
     const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
     const taskDateInput = clean(req.body.taskDate);
-    const taskDate = taskDateInput && /^\\d{4}-\\d{2}-\\d{2}$/.test(taskDateInput) ? new Date(taskDateInput + "T00:00:00.000Z") : new Date();
+    const taskDate = taskDateInput && /^\d{4}-\d{2}-\d{2}$/.test(taskDateInput) ? new Date(taskDateInput + "T00:00:00.000Z") : new Date();
     if (!customerName) return res.status(400).json({ error: "Customer name is required." });
     const now = new Date();
     const item = {
@@ -66,7 +66,7 @@ app.patch("/api/tasks/:id", async (req, res) => {
     for (const key of ["customerName", "phone", "chassisNumber", "vehicleNumber"]) {
       if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
     }
-    if (typeof req.body.taskDate === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(req.body.taskDate)) update.taskDate = new Date(req.body.taskDate + "T00:00:00.000Z");
+    if (typeof req.body.taskDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.taskDate)) update.taskDate = new Date(req.body.taskDate + "T00:00:00.000Z");
     for (const key of ["numberPlateStatus", "rcStatus"]) {
       if (["Received", "Pending"].includes(req.body[key])) update[key] = req.body[key];
     }
