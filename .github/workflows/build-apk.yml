@@ -1,0 +1,68 @@
+name: Build KTL Daily Tasks APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: "Public HTTPS URL of the deployed KTL Daily Tasks app (Render URL)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Validate app URL
+        env:
+          APP_URL: ${{ inputs.app_url }}
+        run: |
+          node -e "const u=new URL(process.env.APP_URL); if(u.protocol!=='https:') process.exit(1); console.log('Building wrapper for',u.origin)"
+
+      - name: Create Capacitor Android wrapper
+        env:
+          APP_URL: ${{ inputs.app_url }}
+        run: |
+          mkdir -p mobile-wrapper
+          cd mobile-wrapper
+          npm init -y
+          npm install @capacitor/core@^7 @capacitor/android@^7
+          npm install --save-dev @capacitor/cli@^7
+          npx cap init "KTL Daily Tasks" "com.shivasha.ktldailytasks" --web-dir www
+          mkdir -p www
+          printf '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><p>Opening KTL Daily Tasks…</p></body></html>' > www/index.html
+          node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('capacitor.config.json','utf8')); p.server={url:process.env.APP_URL, cleartext:false}; p.android={allowMixedContent:false}; fs.writeFileSync('capacitor.config.json',JSON.stringify(p,null,2));"
+          npx cap add android
+          npx cap sync android
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build debug APK
+        working-directory: mobile-wrapper/android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KTL-Daily-Tasks-debug-APK
+          path: mobile-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
