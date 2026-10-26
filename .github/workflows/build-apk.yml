@@ -22,7 +22,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
 
       - name: Validate app URL
         env:
@@ -39,10 +38,9 @@ jobs:
           npm init -y
           npm install @capacitor/core@^7 @capacitor/android@^7
           npm install --save-dev @capacitor/cli@^7
-          npx cap init "KTL Daily Tasks" "com.shivasha.ktldailytasks" --web-dir www
           mkdir -p www
           printf '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><p>Opening KTL Daily Tasks…</p></body></html>' > www/index.html
-          node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('capacitor.config.json','utf8')); p.server={url:process.env.APP_URL, cleartext:false}; p.android={allowMixedContent:false}; fs.writeFileSync('capacitor.config.json',JSON.stringify(p,null,2));"
+          node --input-type=module -e "import fs from 'node:fs'; fs.writeFileSync('capacitor.config.json',JSON.stringify({appId:'com.shivasha.ktldailytasks',appName:'KTL Daily Tasks',webDir:'www',server:{url:process.env.APP_URL,cleartext:false},android:{allowMixedContent:false}},null,2));"
           npx cap add android
           npx cap sync android
 
