@@ -90,6 +90,7 @@ app.post("/api/tasks", async (req, res) => {
   try {
     if (!tasks) return res.status(503).json({ error: "Database is not connected. Set MONGODB_URI." });
     const customerName = clean(req.body.customerName);
+    const executiveName = clean(req.body.executiveName);
     const outlet = clean(req.body.outlet);
     const phone = clean(req.body.phone);
     const chassisNumber = clean(req.body.chassisNumber);
@@ -103,10 +104,11 @@ app.post("/api/tasks", async (req, res) => {
     const taskDateInput = clean(req.body.taskDate);
     const taskDate = taskDateInput && /^\d{4}-\d{2}-\d{2}$/.test(taskDateInput) ? new Date(taskDateInput + "T00:00:00.000Z") : new Date();
     if (!customerName) return res.status(400).json({ error: "Customer name is required." });
+    if (!executiveName) return res.status(400).json({ error: "Executive name is required." });
     if (!OUTLETS.includes(outlet)) return res.status(400).json({ error: "Please select a valid outlet." });
     const now = new Date();
     const item = {
-      customerName, outlet, exShowroomPrice, taxAmount, penalty, phone, chassisNumber, engineNumber, vehicleNumber, taskDate,
+      customerName, executiveName, outlet, exShowroomPrice, taxAmount, penalty, phone, chassisNumber, engineNumber, vehicleNumber, taskDate,
       numberPlateStatus: req.body.numberPlateStatus === "Received" ? "Received" : "Pending",
       rcStatus: req.body.rcStatus === "Received" ? "Received" : "Pending",
       createdAt: now, updatedAt: now
@@ -124,7 +126,7 @@ app.patch("/api/tasks/:id", async (req, res) => {
     const existing = await tasks.findOne({ _id: taskId });
     if (!existing) return res.status(404).json({ error: "Task not found." });
     const update = {};
-    for (const key of ["customerName", "outlet", "phone", "chassisNumber", "engineNumber", "vehicleNumber"]) {
+    for (const key of ["customerName", "executiveName", "outlet", "phone", "chassisNumber", "engineNumber", "vehicleNumber"]) {
       if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
     }
     if (typeof req.body.taskDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.taskDate)) update.taskDate = new Date(req.body.taskDate + "T00:00:00.000Z");
