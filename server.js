@@ -96,6 +96,8 @@ app.post("/api/tasks", async (req, res) => {
     const chassisNumber = clean(req.body.chassisNumber);
     const engineNumber = clean(req.body.engineNumber);
     const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
+    const vehicleType = clean(req.body.vehicleType) || "Private";
+    if (!["Private", "Commercial"].includes(vehicleType)) return res.status(400).json({ error: "Please select Private or Commercial vehicle." });
     const exShowroomPrice = Number(req.body.exShowroomPrice ?? 0);
     if (!Number.isFinite(exShowroomPrice) || exShowroomPrice < 0) return res.status(400).json({ error: "Ex-showroom price must be a valid non-negative number." });
     const taxAmount = Number(req.body.taxAmount ?? 0);
@@ -108,7 +110,7 @@ app.post("/api/tasks", async (req, res) => {
     if (!OUTLETS.includes(outlet)) return res.status(400).json({ error: "Please select a valid outlet." });
     const now = new Date();
     const item = {
-      customerName, executiveName, outlet, exShowroomPrice, taxAmount, penalty, phone, chassisNumber, engineNumber, vehicleNumber, taskDate,
+      customerName, executiveName, outlet, exShowroomPrice, taxAmount, penalty, phone, chassisNumber, engineNumber, vehicleNumber, vehicleType, taskDate,
       numberPlateStatus: req.body.numberPlateStatus === "Received" ? "Received" : "Pending",
       rcStatus: req.body.rcStatus === "Received" ? "Received" : "Pending",
       createdAt: now, updatedAt: now
@@ -126,7 +128,7 @@ app.patch("/api/tasks/:id", async (req, res) => {
     const existing = await tasks.findOne({ _id: taskId });
     if (!existing) return res.status(404).json({ error: "Task not found." });
     const update = {};
-    for (const key of ["customerName", "executiveName", "outlet", "phone", "chassisNumber", "engineNumber", "vehicleNumber"]) {
+    for (const key of ["customerName", "executiveName", "outlet", "phone", "chassisNumber", "engineNumber", "vehicleNumber", "vehicleType"]) {
       if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
     }
     if (typeof req.body.taskDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.taskDate)) update.taskDate = new Date(req.body.taskDate + "T00:00:00.000Z");
@@ -136,6 +138,7 @@ app.patch("/api/tasks/:id", async (req, res) => {
       if (["Received", "Pending"].includes(req.body[key])) update[key] = req.body[key];
     }
     if (update.outlet !== undefined && !OUTLETS.includes(update.outlet)) return res.status(400).json({ error: "Please select a valid outlet." });
+    if (update.vehicleType !== undefined && !["Private", "Commercial"].includes(update.vehicleType)) return res.status(400).json({ error: "Please select Private or Commercial vehicle." });
     if (update.vehicleNumber) update.vehicleNumber = update.vehicleNumber.toUpperCase();
     update.updatedAt = new Date();
     await tasks.updateOne({ _id: taskId }, { $set: update });
