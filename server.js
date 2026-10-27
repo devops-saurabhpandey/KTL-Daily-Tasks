@@ -95,6 +95,8 @@ app.post("/api/tasks", async (req, res) => {
     const chassisNumber = clean(req.body.chassisNumber);
     const engineNumber = clean(req.body.engineNumber);
     const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
+    const exShowroomPrice = Number(req.body.exShowroomPrice ?? 0);
+    if (!Number.isFinite(exShowroomPrice) || exShowroomPrice < 0) return res.status(400).json({ error: "Ex-showroom price must be a valid non-negative number." });
     const taxAmount = Number(req.body.taxAmount ?? 0);
     const penalty = Number(req.body.penalty ?? 0);
     if (!Number.isFinite(taxAmount) || taxAmount < 0 || !Number.isFinite(penalty) || penalty < 0) return res.status(400).json({ error: "Tax amount and penalty must be valid non-negative numbers." });
@@ -104,7 +106,7 @@ app.post("/api/tasks", async (req, res) => {
     if (!OUTLETS.includes(outlet)) return res.status(400).json({ error: "Please select a valid outlet." });
     const now = new Date();
     const item = {
-      customerName, outlet, taxAmount, penalty, phone, chassisNumber, engineNumber, vehicleNumber, taskDate,
+      customerName, outlet, exShowroomPrice, taxAmount, penalty, phone, chassisNumber, engineNumber, vehicleNumber, taskDate,
       numberPlateStatus: req.body.numberPlateStatus === "Received" ? "Received" : "Pending",
       rcStatus: req.body.rcStatus === "Received" ? "Received" : "Pending",
       createdAt: now, updatedAt: now
@@ -126,6 +128,7 @@ app.patch("/api/tasks/:id", async (req, res) => {
       if (typeof req.body[key] === "string") update[key] = clean(req.body[key]);
     }
     if (typeof req.body.taskDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.taskDate)) update.taskDate = new Date(req.body.taskDate + "T00:00:00.000Z");
+    if (req.body.exShowroomPrice !== undefined) { const amount = Number(req.body.exShowroomPrice); if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: "Ex-showroom price must be a valid non-negative number." }); update.exShowroomPrice = amount; }
     for (const key of ["taxAmount", "penalty"]) { if (req.body[key] !== undefined) { const amount = Number(req.body[key]); if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: "Tax amount and penalty must be valid non-negative numbers." }); update[key] = amount; } }
     for (const key of ["numberPlateStatus", "rcStatus"]) {
       if (["Received", "Pending"].includes(req.body[key])) update[key] = req.body[key];
